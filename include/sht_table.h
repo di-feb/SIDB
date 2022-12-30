@@ -7,11 +7,16 @@
 
 
 typedef struct {
-    // Να το συμπληρώσετε
+    bool isSecondaryHashTable;          // Flag that identifies if a file is a HT file.
+    char* fileName;                     // Name of the file.
+    uint fileDesc;                      // File opening ID number from the block level.
+    ulint numOfBuckets;                 // The number of "buckets" in the file hash file
 } SHT_info;
 
 typedef struct {
-    // Να το συμπληρώσετε
+    int blockIndex;                 // Index of the block.             
+    int next;                       // Id of the next block.
+    ulint numOfRecords;             // Number of records inside the block
 } SHT_block_info;
 
 /*Η συνάρτηση SHT_CreateSecondaryIndex χρησιμοποιείται για τη δημιουργία
