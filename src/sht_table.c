@@ -389,8 +389,91 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
 }
 
 int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name){
+    BF_Block *block;
+	BF_Block_Init(&block);
 
+    // Get the block where we have stored the buckets
+    CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc, 1, block));
+
+    // Get the data of this block
+	char *data = BF_Block_GetData(block);
+
+    // Malloc an array to hold the buckets 
+    int *arrayOfBuckets = malloc(sht_info->numOfBuckets * sizeof(int));
+    // Copy data of buckets into the array
+    memcpy(arrayOfBuckets, data, sht_info->numOfBuckets * sizeof(int));
+
+    // Hash the surname.
+    int hashedSurname = hash_string(name);
+    int hashedIndex = hashedSurname % sht_info->numOfBuckets;
+
+    int currentBlock = arrayOfBuckets[hashedIndex];
+    int blocksRead = 1;
+    // Iterate into all the blocks with this hashedIndex
+    while(currentBlock != UNITIALLIZED){
+
+        // Get the block with id = currentBlock
+        CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc, currentBlock, block));
+        // Get the data of this block
+        char* data = BF_Block_GetData(block);
+        // Get the numOfRecords of the block
+        data += BYTES_UNTIL_NUM_OF_RECORDS;
+        ulint numOfRecords;
+        memcpy(&numOfRecords, data, sizeof(ulint)); 
+        Record record;
+        // Go back to the start of the currentBlock data
+        data -= BYTES_UNTIL_NUM_OF_RECORDS;
+        for(int i = 0; i < numOfRecords; i++){
+            // Get the record
+            memcpy(&record, data, sizeof(record));
+            // Check if a identical record.surname exist inside this block
+            if (!strcmp(record.surname, name)){
+                CALL_OR_DIE(BF_UnpinBlock(block));
+                // If there is one go and the block with this record id inside the primary hash table
+                CALL_OR_DIE(BF_GetBlock(ht_info->fileDesc, record.id, block));
+                // Get the data of this block
+                char* ht_data = BF_Block_GetData(block);
+                // Get the number of records inside the block of primary ht
+                ht_data += BYTES_UNTIL_NUM_OF_RECORDS;
+                ulint htNumOfRecords;
+                memcpy(&htNumOfRecords, data, sizeof(ulint));
+                ht_data -= BYTES_UNTIL_NUM_OF_RECORDS;
+                // Check every record, inside the block of primary ht, to find the 
+                // one that has same id as the one we searching for. 
+                for(int j = 0; j < htNumOfRecords; j++){
+                    // Get the record
+                    memcpy(&record, ht_data, sizeof(record));
+                    if (!strcmp(record.surname, name)) {
+                        printRecord(record);
+
+                         // Memory Managment
+                        free(arrayOfBuckets);
+                        CALL_OR_DIE(BF_UnpinBlock(block));
+                        BF_Block_Destroy(&block);
+                        return blocksRead;
+                    }
+                }
+            }
+            // Go to the next Record
+            data += sizeof(Record);
+
+        }
+        // There isnt any record with hashedIndex == value inside this block.
+        // Go to the next block.
+        // Reset data.
+        data = BF_Block_GetData(block);
+        data += BYTES_UNTIL_NEXT;
+        memcpy(&currentBlock, data, sizeof(int));
+        CALL_OR_DIE(BF_UnpinBlock(block));
+    }
+    // Memory Managment
+    free(arrayOfBuckets);
+    BF_Block_Destroy(&block);
+
+    // We didnt found any record with Id == value.
+    return -1;
 }
+
 
 
 
