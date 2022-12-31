@@ -4,12 +4,14 @@ sht:
 	./build/sht_main
 	rm build/sht_main
 	rm data.db
+	rm index.db
 
 valgrind:
 	gcc -I ./include/ -L ./lib/ -Wl,-rpath,./lib/ ./examples/ht_main.c ./src/record.c ./src/ht_table.c -lbf -o ./build/sht_main -O2
 	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./build/sht_main 
 	rm build/sht_main
 	rm data.db
+	rm index.db
 
 clean:
 	rm build/sht_main

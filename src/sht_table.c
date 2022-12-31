@@ -164,6 +164,15 @@ bool isSecondaryHashTable(SHT_info* info){
     return true;
 }
 
+// Borrowed by the Data Bases class of Mister Chatzikokolakis!
+int hash_string(void* value) {
+	// djb2 hash function, simple, fast, and at most cases effective.
+    uint hash = 5381;
+    for (char* s = value; *s != '\0'; s++)
+		hash = (hash << 5) + hash + *s;	// hash = (hash * 33) + *s. 
+    return hash;                        // foo << 5 is a faster version of foo * 32.
+}
+
 int SHT_CreateSecondaryIndex(char *sfileName,  int buckets, char* fileName){
     BF_Block* block;
 
@@ -202,21 +211,152 @@ int SHT_CreateSecondaryIndex(char *sfileName,  int buckets, char* fileName){
     BF_Block_Destroy(&block);
     free(info);
     free(blockInfo);
-
-
 }
 
 SHT_info* SHT_OpenSecondaryIndex(char *indexName){
+    BF_Block* block;                        // block
+    BF_Block_Init(&block);                  // Initiallize the BF_Block.
 
+    SHT_info* info = malloc(sizeof(*info)); // Allocate the struct with the metadata
+    int fileDescriptor;                     // FileDescriptor
+
+    CALL_OR_DIE(BF_OpenFile(indexName, &fileDescriptor));   // Open the file
+    CALL_OR_DIE(BF_GetBlock(fileDescriptor, 0, block));     // Get the first block
+    char* data = BF_Block_GetData(block);                   // Get the data of the first block
+
+    // Copy the SHT_info of file
+    memcpy(info, data, sizeof(*info));
+
+    // Check if the file is a HT file
+    if(isSecondaryHashTable(info))
+        return NULL;
+
+    BF_Block_Destroy(&block);
+
+    return info;
 }
 
 
-int SHT_CloseSecondaryIndex( SHT_info* SHT_info ){
+int SHT_CloseSecondaryIndex(SHT_info* SHT_info ){
+    BF_Block* block;
+    BF_Block_Init(&block); // Initiallize the BF_Block.
 
+    // Unpin first and second blocks
+	CALL_OR_DIE(BF_GetBlock(SHT_info->fileDesc, 0, block));
+	CALL_OR_DIE(BF_UnpinBlock(block));
+
+    CALL_OR_DIE(BF_GetBlock(SHT_info->fileDesc, 1, block));
+	CALL_OR_DIE(BF_UnpinBlock(block));
+
+    // Close the file
+    CALL_OR_DIE(BF_CloseFile(SHT_info->fileDesc));
+
+    // memory managment
+    BF_Block_Destroy(&block);
+    free(SHT_info->fileName);
+    free(SHT_info);
+    return 0;
 }
 
 int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
+    BF_Block *block;
+	BF_Block_Init(&block);
 
+    // Get the block where we have stored the buckets
+    CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc, 1, block));
+
+    // Get the data of this block
+	char *data = BF_Block_GetData(block);
+
+    // Malloc an array to hold the buckets 
+    int *arrayOfBuckets = malloc(sht_info->numOfBuckets * sizeof(int));
+    // Copy data of buckets into the array
+    memcpy(arrayOfBuckets, data, sht_info->numOfBuckets * sizeof(int));
+
+    // Hash the surname.
+    int hashedSurname = hash_string((char*)record.surname);
+    int hashedIndex = hashedSurname % sht_info->numOfBuckets;
+
+    // Check if a specific bucket is unitiallized.
+    // If it is allocate a new block and let bucket point to that block.
+    // If it is NOT just return and do nothing.
+    checkBucket(sht_info, arrayOfBuckets, hashedIndex);
+
+    // Find the last block inside the bucket that is empty.
+    int currentBlock = arrayOfBuckets[hashedIndex];
+    int nextBlock = currentBlock;
+    while(nextBlock != UNITIALLIZED){
+        // Get the block of the nextBlockId
+        CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc, nextBlock, block));
+        // Get the data of this block
+        char* data = BF_Block_GetData(block);
+        // Update currentBlock
+        currentBlock = nextBlock;
+        // Update nextBlock
+        data += BYTES_UNTIL_NEXT;
+        memcpy(&nextBlock, data, sizeof(int));
+        // Unpin the block
+        CALL_OR_DIE(BF_UnpinBlock(block));
+    }
+
+    // We found the last block inside the bucket 
+    // Get its data
+    CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc, currentBlock, block));
+    data = BF_Block_GetData(block);
+    // Go to ht_block_info.numOfRecords
+    data += BYTES_UNTIL_NUM_OF_RECORDS;
+    // Get NumberOfRecords of currentBlock
+    ulint numOfRecords; 
+    memcpy(&numOfRecords, data, sizeof(ulint));
+    
+    // if the numOfRecords == MAX_RECORDS_PER_BLOCK allocate a new block and update 
+    // the currentBlock so its next block will be the block we just allocated
+    if(numOfRecords == MAX_RECORDS_PER_BLOCK){ 
+        int newBlock = createBlock(sht_info);  // create a new block
+        data -= sizeof(int);                  // Go to the next field of the ht_block_info struct of the currentBlock  
+        memcpy(data, &newBlock, sizeof(int)); // Pass the updated next into the next field of the ht_block_info struct of the currentBlock  
+        // Write changes to block
+        BF_Block_SetDirty(block);   
+        CALL_OR_DIE(BF_UnpinBlock(block));
+        // Get the new block and its data
+        CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc, newBlock, block));
+        char* data = BF_Block_GetData(block); 
+        memcpy(data, &record, sizeof(record)); // Insert the record into the new block
+        data += BYTES_UNTIL_NUM_OF_RECORDS; // Go to the HT_block_info.numOfRecords location 
+        // Update the numOfRecords of ht_block_info of the newBlock
+        // and write it back to the data.
+        ulint newBlock_numOfRecords = 1;
+        memcpy(data, &newBlock_numOfRecords, sizeof(ulint));
+
+        // Write changes to block
+        BF_Block_SetDirty(block);
+        CALL_OR_DIE(BF_UnpinBlock(block));
+
+        // Memory Managment
+        BF_Block_Destroy(&block);
+        free(arrayOfBuckets);
+        return newBlock;
+    }
+    // If we have enough space for one more block:
+    // Go back to the start of the data of the currentBlock
+    data -= BYTES_UNTIL_NUM_OF_RECORDS;
+
+    // Calculate the position that the record should be inserted.
+    data += numOfRecords * sizeof(record);    
+    // Insert the record   
+    memcpy(data, &record, sizeof(record)); 
+    // Update numOfRecords
+    numOfRecords++; 
+    // Go to the HT_block_info.numOfRecords location
+    data += BYTES_UNTIL_NUM_OF_RECORDS - ((numOfRecords - 1) * sizeof(Record));
+    memcpy(data, &numOfRecords, sizeof(ulint));
+
+    // Write changes to block
+    BF_Block_SetDirty(block);
+    CALL_OR_DIE(BF_UnpinBlock(block));
+    BF_Block_Destroy(&block);
+    free(arrayOfBuckets);
+    return currentBlock;
 }
 
 int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name){
