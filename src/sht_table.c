@@ -282,7 +282,11 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
     // If it is NOT just return and do nothing.
     checkBucket(sht_info, arrayOfBuckets, hashedIndex);
 
-    // Find the last block inside the bucket that is empty.
+    // We insert the recond only in if there isnt other record with the same surname
+    // To do that we will traverse all the blocks inside that bucket.
+    // If we dont find a record with the same hashed_surname we will insert it 
+    // inside the last block.
+
     int currentBlock = arrayOfBuckets[hashedIndex];
     int nextBlock = currentBlock;
     while(nextBlock != UNITIALLIZED){
@@ -290,15 +294,40 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
         CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc, nextBlock, block));
         // Get the data of this block
         char* data = BF_Block_GetData(block);
+        data += BYTES_UNTIL_NUM_OF_RECORDS;
+        ulint numOfRecords;
+        memcpy(&numOfRecords, data, sizeof(ulint));
+        // Restore the data
+        data -= BYTES_UNTIL_NUM_OF_RECORDS;
+        for(int i = 0; i < numOfRecords; i++){
+            Record currRecord; // Temporary record.
+            // Get the record
+            memcpy(&currRecord, data, sizeof(record));
+            // Check if the record.surname exists
+            // If it does insert nothing, manage the memory and return.
+            if (record.id == currRecord.id && !strcmp(record.surname, currRecord.surname)){
+                
+                // Memory Managment
+                free(arrayOfBuckets);
+                CALL_OR_DIE(BF_UnpinBlock(block));
+				BF_Block_Destroy(&block);
+                return -1;
+            }
+            // Go to the next Record
+			data += sizeof(Record);
+        }
         // Update currentBlock
         currentBlock = nextBlock;
-        // Update nextBlock
+        // Go to SHT_block_info.next
+        data = BF_Block_GetData(block);
         data += BYTES_UNTIL_NEXT;
+        // Update nextBlock
         memcpy(&nextBlock, data, sizeof(int));
         // Unpin the block
         CALL_OR_DIE(BF_UnpinBlock(block));
     }
 
+    // The record we want to insert does not exist inside our SHT
     // We found the last block inside the bucket 
     // Get its data
     CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc, currentBlock, block));
