@@ -408,6 +408,7 @@ int HT_GetAllEntries(HT_info* ht_info, int value){
         data += BYTES_UNTIL_NEXT;
         memcpy(&currentBlock, data, sizeof(int));
         CALL_OR_DIE(BF_UnpinBlock(block));
+        blocksRead++;
     }
 
     // Memory Managment

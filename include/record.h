@@ -19,6 +19,11 @@ typedef struct Record {
 	char city[20];
 } Record;
 
+typedef struct SHT_Record {
+    char name[15];      // Key of the SHT, aka name field of the record struct. 
+	int blockId;        // The block Id inside the primitive HT where this name is stored. 
+} SHT_Record;
+
 Record randomRecord();
 
 void printRecord(Record record);

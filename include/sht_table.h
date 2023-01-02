@@ -16,7 +16,7 @@ typedef struct {
 typedef struct {
     int blockIndex;                 // Index of the block.             
     int next;                       // Id of the next block.
-    ulint numOfRecords;             // Number of records inside the block
+    ulint numOfSHTRecords;          // Number of records inside the block
 } SHT_block_info;
 
 /*Η συνάρτηση SHT_CreateSecondaryIndex χρησιμοποιείται για τη δημιουργία

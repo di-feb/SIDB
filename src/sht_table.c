@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 #include "bf.h"
 #include "sht_table.h"
@@ -8,7 +9,8 @@
 #include "record.h"
 
 #define UNITIALLIZED -1
-#define MAX_RECORDS_PER_BLOCK (BF_BLOCK_SIZE - sizeof(SHT_block_info)) / (sizeof(Record))
+#define MAX_RECORDS_PER_BLOCK (BF_BLOCK_SIZE - sizeof(HT_block_info)) / (sizeof(Record))
+#define MAX_SHT_RECORDS_PER_BLOCK (BF_BLOCK_SIZE - sizeof(SHT_block_info)) / (sizeof(SHT_Record))
 #define BYTES_UNTIL_NUM_OF_RECORDS BF_BLOCK_SIZE - sizeof(SHT_block_info) + sizeof(int) + sizeof(int)
 #define BYTES_UNTIL_NEXT BF_BLOCK_SIZE - sizeof(SHT_block_info) + sizeof(int)
 #define CALL_OR_DIE(call)     \
@@ -41,7 +43,7 @@ SHT_block_info* createSHT_block_info(int index, int next){
     // Initiallize it
     blockInfo->blockIndex = index;
     blockInfo->next = next;
-    blockInfo->numOfRecords = 0;
+    blockInfo->numOfSHTRecords = 0;
 
     return blockInfo;
 }
@@ -173,6 +175,57 @@ int hash_string(void* value) {
     return hash;                        // foo << 5 is a faster version of foo * 32.
 }
 
+// Prints the record inside HT_Block with id:blockId and record.name = name.
+// If there isnt a block with this recordId inside return -1.
+// If there is this block, returns 0.
+// Also incease the number of blocks that have been read until we found all the records with record.name == name
+int printHT_blockId(HT_info* ht_info, int blockId, char* name){
+    BF_Block *block;
+	BF_Block_Init(&block);
+
+
+    // Get the block with id = block
+    CALL_OR_DIE(BF_GetBlock(ht_info->fileDesc, blockId, block));
+    // Get the data of this block
+    char* data = BF_Block_GetData(block);
+    // Get the numOfRecords of the block
+    data += BYTES_UNTIL_NUM_OF_RECORDS;
+    ulint numOfRecords;
+    memcpy(&numOfRecords, data, sizeof(ulint)); 
+    Record record;
+    // Go back to the start of the currentBlock data
+    data -= BYTES_UNTIL_NUM_OF_RECORDS;
+
+    for(int i = 0; i < numOfRecords; i++){
+        // Get the record
+        memcpy(&record, data, sizeof(record));
+        // Check if the record.id has the correct value, and the names are the same.
+        if (!strcmp(record.name, name)){
+            printRecord(record);
+            // Memory Managment
+            CALL_OR_DIE(BF_UnpinBlock(block));
+            BF_Block_Destroy(&block);
+            return 0;
+        }
+        // Go to the next Record
+        data += sizeof(Record);
+    }
+
+    // Memory Managment
+    CALL_OR_DIE(BF_UnpinBlock(block));
+    BF_Block_Destroy(&block);
+
+    // We didnt found any record with Id == recordId.
+    return -1;
+}
+
+// Mallocs an integer with value == value
+int* create_int(int value) {
+	int* p = malloc(sizeof(int));
+	*p = value;
+	return p;
+}
+
 int SHT_CreateSecondaryIndex(char *sfileName,  int buckets, char* fileName){
     BF_Block* block;
 
@@ -261,7 +314,6 @@ int SHT_CloseSecondaryIndex(SHT_info* SHT_info ){
 int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
     BF_Block *block;
 	BF_Block_Init(&block);
-
     // Get the block where we have stored the buckets
     CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc, 1, block));
 
@@ -273,20 +325,16 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
     // Copy data of buckets into the array
     memcpy(arrayOfBuckets, data, sht_info->numOfBuckets * sizeof(int));
 
-    // Hash the surname.
-    int hashedSurname = hash_string((char*)record.surname);
-    int hashedIndex = hashedSurname % sht_info->numOfBuckets;
+    // Hash the Name.
+    int hashedName = hash_string(record.name);
+    int hashedIndex = hashedName % sht_info->numOfBuckets;
 
     // Check if a specific bucket is unitiallized.
     // If it is allocate a new block and let bucket point to that block.
     // If it is NOT just return and do nothing.
     checkBucket(sht_info, arrayOfBuckets, hashedIndex);
 
-    // We insert the recond only in if there isnt other record with the same surname
-    // To do that we will traverse all the blocks inside that bucket.
-    // If we dont find a record with the same hashed_surname we will insert it 
-    // inside the last block.
-
+    // We need to find the last block inside that bucket to insert the SHT_Record
     int currentBlock = arrayOfBuckets[hashedIndex];
     int nextBlock = currentBlock;
     while(nextBlock != UNITIALLIZED){
@@ -294,68 +342,47 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
         CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc, nextBlock, block));
         // Get the data of this block
         char* data = BF_Block_GetData(block);
-        data += BYTES_UNTIL_NUM_OF_RECORDS;
-        ulint numOfRecords;
-        memcpy(&numOfRecords, data, sizeof(ulint));
-        // Restore the data
-        data -= BYTES_UNTIL_NUM_OF_RECORDS;
-        for(int i = 0; i < numOfRecords; i++){
-            Record currRecord; // Temporary record.
-            // Get the record
-            memcpy(&currRecord, data, sizeof(record));
-            // Check if the record.surname exists
-            // If it does insert nothing, manage the memory and return.
-            if (record.id == currRecord.id && !strcmp(record.surname, currRecord.surname)){
-                
-                // Memory Managment
-                free(arrayOfBuckets);
-                CALL_OR_DIE(BF_UnpinBlock(block));
-				BF_Block_Destroy(&block);
-                return -1;
-            }
-            // Go to the next Record
-			data += sizeof(Record);
-        }
         // Update currentBlock
         currentBlock = nextBlock;
-        // Go to SHT_block_info.next
-        data = BF_Block_GetData(block);
-        data += BYTES_UNTIL_NEXT;
         // Update nextBlock
+        data += BYTES_UNTIL_NEXT;
         memcpy(&nextBlock, data, sizeof(int));
         // Unpin the block
         CALL_OR_DIE(BF_UnpinBlock(block));
     }
 
-    // The record we want to insert does not exist inside our SHT
     // We found the last block inside the bucket 
     // Get its data
     CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc, currentBlock, block));
     data = BF_Block_GetData(block);
-    // Go to ht_block_info.numOfRecords
+    // Go to sht_block_info.numOfSHTRecords
     data += BYTES_UNTIL_NUM_OF_RECORDS;
     // Get NumberOfRecords of currentBlock
-    ulint numOfRecords; 
-    memcpy(&numOfRecords, data, sizeof(ulint));
+    ulint numOfSHTRecords; 
+    memcpy(&numOfSHTRecords, data, sizeof(ulint));
     
-    // if the numOfRecords == MAX_RECORDS_PER_BLOCK allocate a new block and update 
+    // if the numOfSHTRecords == MAX_SHT_RECORDS_PER_BLOCK allocate a new block and update 
     // the currentBlock so its next block will be the block we just allocated
-    if(numOfRecords == MAX_RECORDS_PER_BLOCK){ 
+    if(numOfSHTRecords == MAX_SHT_RECORDS_PER_BLOCK){ 
         int newBlock = createBlock(sht_info);  // create a new block
-        data -= sizeof(int);                  // Go to the next field of the ht_block_info struct of the currentBlock  
-        memcpy(data, &newBlock, sizeof(int)); // Pass the updated next into the next field of the ht_block_info struct of the currentBlock  
+        data -= sizeof(int);                   // Go to the next field of the sht_block_info struct of the currentBlock  
+        memcpy(data, &newBlock, sizeof(int));  // Pass the updated next into the next field of the ht_block_info struct of the currentBlock  
         // Write changes to block
         BF_Block_SetDirty(block);   
         CALL_OR_DIE(BF_UnpinBlock(block));
         // Get the new block and its data
         CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc, newBlock, block));
         char* data = BF_Block_GetData(block); 
-        memcpy(data, &record, sizeof(record)); // Insert the record into the new block
-        data += BYTES_UNTIL_NUM_OF_RECORDS; // Go to the HT_block_info.numOfRecords location 
-        // Update the numOfRecords of ht_block_info of the newBlock
+        // Make a new SHT_Record and initiallize it.
+        SHT_Record sht_record; 
+        strcpy(sht_record.name, record.name);
+        sht_record.blockId = block_id;
+        memcpy(data, &sht_record, sizeof(sht_record)); // Insert the sht_record into the new block
+        data += BYTES_UNTIL_NUM_OF_RECORDS; // Go to the SHT_block_info.numOfSHTRecords location 
+        // Update the numOfSHTRecords of sht_block_info of the newBlock
         // and write it back to the data.
-        ulint newBlock_numOfRecords = 1;
-        memcpy(data, &newBlock_numOfRecords, sizeof(ulint));
+        ulint newBlock_numOfSHTRecords = 1;
+        memcpy(data, &newBlock_numOfSHTRecords, sizeof(ulint));
 
         // Write changes to block
         BF_Block_SetDirty(block);
@@ -370,15 +397,19 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
     // Go back to the start of the data of the currentBlock
     data -= BYTES_UNTIL_NUM_OF_RECORDS;
 
+    // Make a new SHT_Record and initiallize it.
+    SHT_Record sht_record; 
+    strcpy(sht_record.name, record.name);
+    sht_record.blockId = block_id;
     // Calculate the position that the record should be inserted.
-    data += numOfRecords * sizeof(record);    
+    data += numOfSHTRecords * sizeof(sht_record);    
     // Insert the record   
-    memcpy(data, &record, sizeof(record)); 
-    // Update numOfRecords
-    numOfRecords++; 
-    // Go to the HT_block_info.numOfRecords location
-    data += BYTES_UNTIL_NUM_OF_RECORDS - ((numOfRecords - 1) * sizeof(Record));
-    memcpy(data, &numOfRecords, sizeof(ulint));
+    memcpy(data, &sht_record, sizeof(sht_record)); 
+    // Update numOfSHTRecords
+    numOfSHTRecords++; 
+    // Go to the SHT_block_info.numOfSHTRecords location
+    data += BYTES_UNTIL_NUM_OF_RECORDS - ((numOfSHTRecords - 1) * sizeof(SHT_Record));
+    memcpy(data, &numOfSHTRecords, sizeof(ulint));
 
     // Write changes to block
     BF_Block_SetDirty(block);
@@ -392,6 +423,8 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
     BF_Block *block;
 	BF_Block_Init(&block);
 
+    int recordFound = 0; // A boolean to help us return the correct exit code.
+
     // Get the block where we have stored the buckets
     CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc, 1, block));
 
@@ -403,12 +436,12 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
     // Copy data of buckets into the array
     memcpy(arrayOfBuckets, data, sht_info->numOfBuckets * sizeof(int));
 
-    // Hash the surname.
-    int hashedSurname = hash_string(name);
-    int hashedIndex = hashedSurname % sht_info->numOfBuckets;
+    // Hash the Name.
+    int hashedName = hash_string(name);
+    int hashedIndex = hashedName % sht_info->numOfBuckets;
 
     int currentBlock = arrayOfBuckets[hashedIndex];
-    int blocksRead = 1;
+    int* blocksRead = create_int(1);
     // Iterate into all the blocks with this hashedIndex
     while(currentBlock != UNITIALLIZED){
 
@@ -416,62 +449,147 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
         CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc, currentBlock, block));
         // Get the data of this block
         char* data = BF_Block_GetData(block);
-        // Get the numOfRecords of the block
+        // Get the numOfSHTRecords of the block
         data += BYTES_UNTIL_NUM_OF_RECORDS;
-        ulint numOfRecords;
-        memcpy(&numOfRecords, data, sizeof(ulint)); 
-        Record record;
+        ulint numOfSHTRecords;
+        memcpy(&numOfSHTRecords, data, sizeof(ulint)); 
+        SHT_Record sht_record; // temporary sht_record
         // Go back to the start of the currentBlock data
         data -= BYTES_UNTIL_NUM_OF_RECORDS;
-        for(int i = 0; i < numOfRecords; i++){
-            // Get the record
-            memcpy(&record, data, sizeof(record));
-            // Check if a identical record.surname exist inside this block
-            if (!strcmp(record.surname, name)){
-                CALL_OR_DIE(BF_UnpinBlock(block));
-                // If there is one go and the block with this record id inside the primary hash table
-                CALL_OR_DIE(BF_GetBlock(ht_info->fileDesc, record.id, block));
-                // Get the data of this block
-                char* ht_data = BF_Block_GetData(block);
-                // Get the number of records inside the block of primary ht
-                ht_data += BYTES_UNTIL_NUM_OF_RECORDS;
-                ulint htNumOfRecords;
-                memcpy(&htNumOfRecords, data, sizeof(ulint));
-                ht_data -= BYTES_UNTIL_NUM_OF_RECORDS;
-                // Check every record, inside the block of primary ht, to find the 
-                // one that has same id as the one we searching for. 
-                for(int j = 0; j < htNumOfRecords; j++){
-                    // Get the record
-                    memcpy(&record, ht_data, sizeof(record));
-                    if (!strcmp(record.surname, name)) {
-                        printRecord(record);
-
-                         // Memory Managment
-                        free(arrayOfBuckets);
-                        CALL_OR_DIE(BF_UnpinBlock(block));
-                        BF_Block_Destroy(&block);
-                        return blocksRead;
-                    }
+        for(int i = 0; i < numOfSHTRecords; i++){
+            // Get the sht_record
+            memcpy(&sht_record, data, sizeof(sht_record));
+            // Check if a identical record.name exist inside this block
+            if (!strcmp(sht_record.name, name)){
+                // If there is one go and find the block with this name inside the primary hash table.
+                // Then print this record.
+                int htBlockNumber = printHT_blockId(ht_info, sht_record.blockId, name);
+                if(htBlockNumber == -1){// Error Handling
+                    perror("There is not a block inside HT with this record\n"); 
+                    free(arrayOfBuckets);
+                    free(blocksRead);
+                    CALL_OR_DIE(BF_UnpinBlock(block));
+                    BF_Block_Destroy(&block);
+                    exit(1);
                 }
+                recordFound = 1;
             }
-            // Go to the next Record
-            data += sizeof(Record);
-
+            // Its possible that there are multiple Records with the same name.
+            // We want to print them all.
+            // Go to the next SHT_Record
+            data += sizeof(SHT_Record);
         }
-        // There isnt any record with hashedIndex == value inside this block.
+        // There isnt any sht_record with sht_record.name == name inside this block.
         // Go to the next block.
         // Reset data.
         data = BF_Block_GetData(block);
         data += BYTES_UNTIL_NEXT;
         memcpy(&currentBlock, data, sizeof(int));
         CALL_OR_DIE(BF_UnpinBlock(block));
+        (*blocksRead)++;
     }
     // Memory Managment
     free(arrayOfBuckets);
     BF_Block_Destroy(&block);
 
-    // We didnt found any record with Id == value.
+    int totalBlocksRead = *blocksRead;
+    free(blocksRead);
+    if(recordFound)
+        return totalBlocksRead;
+    // We didnt found any record with record.name = name   
     return -1;
+}
+
+int HashStatistics(char *fileName) {
+    // Get the HT_info of the file.
+    HT_info* info = HT_OpenFile(fileName);
+
+    // Just for beauty
+    printf("\n       Statistics of the SHT_file\n");
+    printf("---------------------------------------\n");
+
+    //Number of blocks inside the file
+    int* numOfBlocks = malloc(sizeof(int)); 
+    CALL_OR_DIE(BF_GetBlockCounter(info->fileDesc, numOfBlocks));
+    printf("Number of blocks inside the HT_file:%d\n", *numOfBlocks);
+
+    // Avg blocks per bucket
+    int averageBlocksPerBucket = *numOfBlocks / info->numOfBuckets;
+    printf("Average number of blocks inside each bucket:%d\n\n", averageBlocksPerBucket);
+
+    BF_Block *block;
+	BF_Block_Init(&block);
+
+    // Get the block where we have store the buckets
+    CALL_OR_DIE(BF_GetBlock(info->fileDesc, 1, block));
+
+    // Get the data of this block
+	char *data = BF_Block_GetData(block);
+
+    // Malloc an array to hold the buckets 
+    int *arrayOfBuckets = malloc(info->numOfBuckets * sizeof(int));
+    // Copy data of buckets into the array
+    memcpy(arrayOfBuckets, data, info->numOfBuckets * sizeof(int));
+
+    // Iterate each bucket and hold the number of its records.    
+    int minRecords = INT_MAX;       // Minimum number of records in all the buckets.
+    int maxRecords = 0;             // Maximum number of records in all the buckets.
+    int minRecordsBucket = 0;       // Bucket's ID that holds the minimum number of records.
+    int maxRecordsBucket = 0;       // Bucket's ID that holds the maximum number of records.
+    int totalRecords = 0;           // Total records in all the buckets.
+    int numOfBucketsOverflowed = 0; // Number of buckets that have been overflowed.
+    for(int i = 0; i < info->numOfBuckets; i++) {
+        printf("BucketID:%d\n", i);
+        int numOfRecords = 0;
+        int currentBlock = arrayOfBuckets[i];
+        while(currentBlock != UNITIALLIZED){
+            int currentBlockRecords;
+            // Get the block where we have store the buckets
+            CALL_OR_DIE(BF_GetBlock(info->fileDesc, currentBlock, block));
+            // Get the data of this block
+	        char *data = BF_Block_GetData(block);
+            // Go to the Ht_block_info.numOfRecords 
+            data += BYTES_UNTIL_NUM_OF_RECORDS;
+            memcpy(&currentBlockRecords, data, sizeof(int));
+            numOfRecords += currentBlockRecords;
+            // Go to Ht_block_info.next 
+            data -= sizeof(int); 
+            memcpy(&currentBlock, data, sizeof(int));
+            BF_UnpinBlock(block);
+        }
+        //Update totalRecords counter 
+        totalRecords += numOfRecords;
+        // If the number of records inside the bucket is greater than the maximun 
+        // number of records inside one block it means that the bucket has been overflowed.
+        if(numOfRecords > MAX_RECORDS_PER_BLOCK){
+            printf("Overflowed: YES\n");
+            numOfBucketsOverflowed++; // Update counter.
+
+            // Number of OverflowedBlocks of each bucket = bucketInfo.numOfRecords / MAX_RECORDS_PER_BLOCK
+            int maxRecordsPerBlock = MAX_RECORDS_PER_BLOCK;
+            printf("Number of Overflowed Blocks:%d\n\n", (numOfRecords / maxRecordsPerBlock));
+        }
+
+        if(numOfRecords > maxRecords){
+            maxRecords = numOfRecords;
+            maxRecordsBucket = i;
+        }
+        if(numOfRecords < minRecords){
+            minRecords = numOfRecords;
+            minRecordsBucket = i;
+        }
+    }
+
+    printf("Bucket's id with LESS Records:%d and has %d Records\n", minRecordsBucket, minRecords);
+    printf("Bucket's id with MORE Records:%d and has %d Records\n", maxRecordsBucket, maxRecords);
+    printf("Average records per bucket:%ld\n", totalRecords/info->numOfBuckets);
+    printf("Number of buckets that have been Overflowed:%d\n", numOfBucketsOverflowed);
+
+    free(numOfBlocks);
+    free(arrayOfBuckets);
+    free(info);
+    BF_Block_Destroy(&block);
+
 }
 
 
