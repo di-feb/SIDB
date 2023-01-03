@@ -419,7 +419,7 @@ int HT_GetAllEntries(HT_info* ht_info, int value){
     return -1;
 }
 
-void HashStatistics(char *fileName) {
+int HashStatistics(char *fileName) {
     // Get the HT_info of the file.
     HT_info* info = HT_OpenFile(fileName);
 
@@ -508,6 +508,7 @@ void HashStatistics(char *fileName) {
     free(arrayOfBuckets);
     free(info);
     BF_Block_Destroy(&block);
+    return 0;
 
 }
 
