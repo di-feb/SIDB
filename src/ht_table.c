@@ -3,9 +3,9 @@
 #include <string.h>
 #include <limits.h>
 
-#include "bf.h"
-#include "ht_table.h"
-#include "record.h"
+#include "../include/bf.h"
+#include "../include/ht_table.h"
+#include "../include/record.h"
 
 #define UNITIALLIZED -1
 #define MAX_RECORDS_PER_BLOCK (BF_BLOCK_SIZE - sizeof(HT_block_info)) / (sizeof(Record))
@@ -419,7 +419,7 @@ int HT_GetAllEntries(HT_info* ht_info, int value){
     return -1;
 }
 
-int HashStatistics(char *fileName) {
+void HashStatistics(char *fileName) {
     // Get the HT_info of the file.
     HT_info* info = HT_OpenFile(fileName);
 
