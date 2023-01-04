@@ -115,6 +115,9 @@ void createBuckets(HT_info* info){
     // Write the block back to the disk.
     BF_Block_SetDirty(block);
 
+    // Unpin the block so we can close the file inside HT_CreateIndex
+    CALL_OR_DIE(BF_UnpinBlock(block));
+
     free(array_of_buckets);
     free(blockInfo);
     BF_Block_Destroy(&block);
@@ -197,10 +200,15 @@ int HT_CreateFile(char *fileName, int buckets){
     // Write the block back to the disk.
     BF_Block_SetDirty(block);
 
+    // Unpin the block so we can close the file
+    CALL_OR_DIE(BF_UnpinBlock(block));
+
+    // Close the file
+    CALL_OR_DIE(BF_CloseFile(fileDescriptor));
+
     // Memory managment
     BF_Block_Destroy(&block);
-    free(info);
-    free(blockInfo);
+    infoDestroy(info, blockInfo);
 
     return 0;
 }
@@ -223,6 +231,9 @@ HT_info* HT_OpenFile(char *fileName){
     if(isHashTable(info))
         return NULL;
 
+    // Unpin the block
+    CALL_OR_DIE(BF_UnpinBlock(block));
+
     BF_Block_Destroy(&block);
 
     return info;
@@ -230,22 +241,12 @@ HT_info* HT_OpenFile(char *fileName){
 
 
 int HT_CloseFile(HT_info* HT_info){
-	BF_Block* block;
-    BF_Block_Init(&block); // Initiallize the BF_Block.
-
-    // Unpin first and second blocks
-	CALL_OR_DIE(BF_GetBlock(HT_info->fileDesc, 0, block));
-	CALL_OR_DIE(BF_UnpinBlock(block));
-
-    CALL_OR_DIE(BF_GetBlock(HT_info->fileDesc, 1, block));
-	CALL_OR_DIE(BF_UnpinBlock(block));
-
     // Close the file
+    printf("close:%d\n", HT_info->fileDesc);
     CALL_OR_DIE(BF_CloseFile(HT_info->fileDesc));
 
     // memory managment
-    BF_Block_Destroy(&block);
-    free(HT_info->fileName);
+    // free(HT_info->fileName);
     free(HT_info);
     return 0;
 }
@@ -264,6 +265,9 @@ int HT_InsertEntry(HT_info* ht_info, Record record){
     int *arrayOfBuckets = malloc(ht_info->numOfBuckets * sizeof(int));
     // Copy data of buckets into the array
     memcpy(arrayOfBuckets, data, ht_info->numOfBuckets * sizeof(int));
+
+    // Unpin the block with the buckets we dont need it anymore
+    CALL_OR_DIE(BF_UnpinBlock(block));
 
     // hash the id because we need to store the hashed_id into the buckets.
     int hashedId = record.id % ht_info->numOfBuckets;
@@ -365,6 +369,9 @@ int HT_GetAllEntries(HT_info* ht_info, int value){
     // Copy data of buckets into the array
     memcpy(arrayOfBuckets, data, ht_info->numOfBuckets * sizeof(int));
 
+    // Unpin the block we dont need it anymore.
+    CALL_OR_DIE(BF_UnpinBlock(block));
+
     // Find the hased id of the records.
     // The records we want are going to have this specific hashedId
     int hashedId = value % ht_info->numOfBuckets;
@@ -419,9 +426,13 @@ int HT_GetAllEntries(HT_info* ht_info, int value){
     return -1;
 }
 
+// We take as fact that the Hash Table file already exist.
+// Also you need to already have initiallized the BF level with BF_Init().
+// If it doesnt we have undefined behavior.
 int HashStatistics(char *fileName) {
     // Get the HT_info of the file.
     HT_info* info = HT_OpenFile(fileName);
+    printf("fd:%d\n", info->fileDesc);
 
     // Just for beauty
     printf("\n       Statistics of the HT_file\n");
@@ -449,6 +460,9 @@ int HashStatistics(char *fileName) {
     int *arrayOfBuckets = malloc(info->numOfBuckets * sizeof(int));
     // Copy data of buckets into the array
     memcpy(arrayOfBuckets, data, info->numOfBuckets * sizeof(int));
+
+    // Unpin the block
+    CALL_OR_DIE(BF_UnpinBlock(block));
 
     // Iterate each bucket and hold the number of its records.    
     int minRecords = INT_MAX;       // Minimum number of records in all the buckets.
@@ -504,12 +518,11 @@ int HashStatistics(char *fileName) {
     printf("Average records per bucket:%ld\n", totalRecords/info->numOfBuckets);
     printf("Number of buckets that have been Overflowed:%d\n", numOfBucketsOverflowed);
 
+    CALL_OR_DIE(HT_CloseFile(info));
     free(numOfBlocks);
     free(arrayOfBuckets);
-    free(info);
     BF_Block_Destroy(&block);
     return 0;
-
 }
 
 
