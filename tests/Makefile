@@ -1,47 +1,35 @@
-# paths
-INCLUDE = ../include/
-LIB = ../lib/
+sht_test:
+	@echo " Compile hp_main ...";
+	gcc -I ./include/ -L ./lib/ -Wl,-rpath,./lib/ ./sht_table_test.c ../src/record.c ../src/sht_table.c ../src/ht_table.c -lbf -o ./sht_table_test -O2
+	./sht_table_test
+	rm sht_table_test
+	rm data.db
+	rm index.db
 
-# compiler
-CC = gcc
+ht_test:
+	@echo " Compile hp_main ...";
+	gcc -I ./include/ -L ./lib/ -Wl,-rpath,./lib/ ./ht_table_test.c ../src/record.c ../src/ht_table.c -lbf -o ./ht_table_test -O2
+	./ht_table_test
+	rm ht_table_test
+	rm data.db
 
-# Compile options.
-CFLAGS = -Wall -g -I$(INCLUDE)
-LDFLAGS = -lm 
+val_sht_test:
+	gcc -I ./include/ -L ./lib/ -Wl,-rpath,./lib/ ./sht_table_test.c ../src/record.c ../src/sht_table.c ../src/ht_table.c -lbf -o ./sht_table_test -O2
+	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./sht_table_test
+	rm sht_table_test
+	rm data.db
+	rm index.db
 
-# objects HT_table
-HT_table_test_OBJS = ht_table_test.o ../src/ht_table.o ../src/record.o 
-# objects SHT_table
-SHT_table_test_OBJS = sht_table_test.o ../src/sht_table.o ../src/record.o 
-
-# The executable program for ht
-EXEC_HT = ht_test
-
-# The executable program for sht
-EXEC_SHT = sht_test
-
-
-$(EXEC_HT): $(HT_table_test_OBJS)
-	$(CC) $(CFLAGS) $(HT_table_test_OBJS) -o $(EXEC_HT) $(LDFLAGS)
-	rm $(RMFLAGS) $(HT_table_test_OBJS)
-
-$(EXEC_SHT): $(SHT_table_test_OBJS)
-	$(CC) $(CFLAGS) $(SHT_table_test_OBJS) -o $(EXEC_SHT) $(LDFLAGS)
-	rm $(RMFLAGS) $(SHT_table_test_OBJS)
-clean_ht:
-	rm -f $(HT_table_test_OBJS) $(EXEC_HT)
-
+val_ht_test:
+	gcc -I ./include/ -L ./lib/ -Wl,-rpath,./lib/ ./ht_table_test.c ../src/record.c ../src/ht_table.c -lbf -o ./ht_table_test -O2
+	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./ht_table_test
+	rm ht_table_test
+	rm data.db
 clean_sht:
-	rm -f $(SHT_table_test_OBJS) $(EXEC_SHT)
+	rm sht_table_test
+	rm data.db
+	rm index.db
 
-run_ht: $(EXEC_HT)
-	./$(EXEC_HT)
-
-run_sht: $(EXEC_SHT)
-	./$(EXEC_SHT)
-
-valgrind_ht: $(EXEC)
-	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./$(EXEC_HT)
-
-valgrind_sht: $(EXEC)
-	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./$(EXEC_SHT)
+clean_ht:
+	rm ht_table_test
+	rm data.db
