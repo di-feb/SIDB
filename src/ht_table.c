@@ -3,9 +3,9 @@
 #include <string.h>
 #include <limits.h>
 
-#include "../include/bf.h"
-#include "../include/ht_table.h"
-#include "../include/record.h"
+#include "bf.h"
+#include "ht_table.h"
+#include "record.h"
 
 #define UNITIALLIZED -1
 #define MAX_RECORDS_PER_BLOCK (BF_BLOCK_SIZE - sizeof(HT_block_info)) / (sizeof(Record))
@@ -20,14 +20,14 @@
     }                         \
   }
 
-// Mallocs and initiallizes a struct HT_info
-HT_info* createHT_info(char* fileName, int fileDescriptor, int numOfBuckets, size_t size){
+// Mallocs and initiallizes a struct HT_info.
+// Initiallizes all the fields exept fileName so we are
+// able to free the memory.
+HT_info* createHT_info(int fileDescriptor, int numOfBuckets){
     // Allocate the struct with the data
     HT_info* info = malloc(sizeof(*info)); 
     // Initiallize it
     info->isHashTable = true;
-    info->fileName = malloc(size);
-    strcpy(info->fileName, fileName);
     info->fileDesc = fileDescriptor;
     info->numOfBuckets = numOfBuckets;
 
@@ -155,7 +155,6 @@ void checkBucket(HT_info* info, int* buckets, int hashedId){
 
 // Frees the memory of the structs HT_info, HT_block_info.
 void infoDestroy(HT_info* info, HT_block_info* block_info){
-    free(info->fileName);
     free(info);
     free(block_info);
 }
@@ -179,10 +178,9 @@ int HT_CreateFile(char *fileName, int buckets){
 	CALL_OR_DIE(BF_AllocateBlock(fileDescriptor, block));
 
     char* data = BF_Block_GetData(block);
-    size_t sizeOfFilename = sizeof(fileName);
 
     // Create struct HT_info
-	HT_info* info = createHT_info(fileName, fileDescriptor, buckets, sizeOfFilename); 
+	HT_info* info = createHT_info(fileDescriptor, buckets); 
 	// Store the info
     memcpy(data, info, sizeof(*info));
 
@@ -218,6 +216,7 @@ HT_info* HT_OpenFile(char *fileName){
     BF_Block_Init(&block);                  // Initiallize the BF_Block.
 
     HT_info* info = malloc(sizeof(*info));  // Allocate the struct with the metadata
+
     int fileDescriptor;                     // FileDescriptor
 
     CALL_OR_DIE(BF_OpenFile(fileName, &fileDescriptor));    // Open the file
@@ -226,6 +225,10 @@ HT_info* HT_OpenFile(char *fileName){
 
     // Copy the HT_info of file
     memcpy(info, data, sizeof(*info));
+    // Update fileName
+    // We allocate it inside openFile so we can free the pointer.
+    info->fileName = malloc(sizeof(fileName));
+    strcpy(info->fileName, fileName);
 
     // Check if the file is a HT file
     if(isHashTable(info))
@@ -245,7 +248,7 @@ int HT_CloseFile(HT_info* HT_info){
     CALL_OR_DIE(BF_CloseFile(HT_info->fileDesc));
 
     // memory managment
-    // free(HT_info->fileName);
+    free(HT_info->fileName);
     free(HT_info);
     return 0;
 }
@@ -431,7 +434,6 @@ int HT_GetAllEntries(HT_info* ht_info, int value){
 int HashStatistics(char *fileName) {
     // Get the HT_info of the file.
     HT_info* info = HT_OpenFile(fileName);
-    printf("fd:%d\n", info->fileDesc);
 
     // Just for beauty
     printf("\n       Statistics of the HT_file\n");
