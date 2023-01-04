@@ -10,9 +10,9 @@ CFLAGS = -Wall -g -I$(INCLUDE)
 LDFLAGS = -lm 
 
 # objects HT_table
-HT_table_test_OBJS = ht_table_test.o ../src/ht_table.o ../src/record.c $(LIB)/libbf.so
+HT_table_test_OBJS = ht_table_test.o ../src/ht_table.o ../src/record.o 
 # objects SHT_table
-SHT_table_test_OBJS = sht_table_test.o ../src/sht_table.o ../src/record.c $(LIB)/libbf.so
+SHT_table_test_OBJS = sht_table_test.o ../src/sht_table.o ../src/record.o 
 
 # The executable program for ht
 EXEC_HT = ht_test
