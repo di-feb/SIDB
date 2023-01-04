@@ -25,7 +25,7 @@ typedef struct SHT_Record {
 } SHT_Record;
 
 Record randomRecord();
-
+Record randomRecord_WithSpecificID(int id);
 void printRecord(Record record);
 
 #endif
