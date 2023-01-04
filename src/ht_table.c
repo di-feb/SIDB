@@ -242,7 +242,6 @@ HT_info* HT_OpenFile(char *fileName){
 
 int HT_CloseFile(HT_info* HT_info){
     // Close the file
-    printf("close:%d\n", HT_info->fileDesc);
     CALL_OR_DIE(BF_CloseFile(HT_info->fileDesc));
 
     // memory managment
