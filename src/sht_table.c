@@ -3,10 +3,10 @@
 #include <string.h>
 #include <limits.h>
 
-#include "bf.h"
-#include "sht_table.h"
-#include "ht_table.h"
-#include "record.h"
+#include "../include/bf.h"
+#include "../include/ht_table.h"
+#include "../include/sht_table.h"
+#include "../include/record.h"
 
 #define UNITIALLIZED -1
 #define MAX_RECORDS_PER_BLOCK (BF_BLOCK_SIZE - sizeof(HT_block_info)) / (sizeof(Record))
@@ -23,13 +23,13 @@
   }
 
 // Mallocs and initiallizes a struct SHT_info
-SHT_info* createSHT_info(char* fileName, int fileDescriptor, int numOfBuckets, size_t size){
+// Initiallizes all the fields exept fileName so we are
+// able to free the memory.
+SHT_info* createSHT_info(int fileDescriptor, int numOfBuckets){
     // Allocate the struct SHT_info
     SHT_info* info = malloc(sizeof(*info)); 
     // Initiallize it
     info->isSecondaryHashTable = true;
-    info->fileName = malloc(size);
-    strcpy(info->fileName, fileName);
     info->fileDesc = fileDescriptor;
     info->numOfBuckets = numOfBuckets;
 
@@ -117,6 +117,9 @@ static void createBuckets(SHT_info* info){
     // Write the block back to the disk.
     BF_Block_SetDirty(block);
 
+    // Unpin the block 
+    CALL_OR_DIE(BF_UnpinBlock(block));
+
     free(array_of_buckets);
     free(blockInfo);
     BF_Block_Destroy(&block);
@@ -154,7 +157,6 @@ static void checkBucket(SHT_info* info, int* buckets, int hashedId){
 
 // Frees the memory of the structs SHT_info, SHT_block_info.
 static void infoDestroy(SHT_info* info, SHT_block_info* block_info){
-    free(info->fileName);
     free(info);
     free(block_info);
 }
@@ -226,7 +228,7 @@ int* create_int(int value) {
 	return p;
 }
 
-int SHT_CreateSecondaryIndex(char *sfileName,  int buckets, char* fileName){
+int SHT_CreateSecondaryIndex(char *sfileName, int buckets, char* fileName){
     BF_Block* block;
 
     BF_Block_Init(&block); // Initiallize the struct BF_Block.
@@ -239,10 +241,8 @@ int SHT_CreateSecondaryIndex(char *sfileName,  int buckets, char* fileName){
 
     char* data = BF_Block_GetData(block);
 
-    // Size of fileName
-    size_t sizeOfFilename = sizeof(fileName);
     // Create struct SHT_info
-	SHT_info* info = createSHT_info(fileName, fileDescriptor, buckets, sizeOfFilename); 
+	SHT_info* info = createSHT_info(fileDescriptor, buckets); 
     // Store the info into the data
     memcpy(data, info, sizeof(*info));
 
@@ -260,10 +260,15 @@ int SHT_CreateSecondaryIndex(char *sfileName,  int buckets, char* fileName){
     // Write the block back to the disk.
     BF_Block_SetDirty(block);
 
+    // Unpin the block
+    CALL_OR_DIE(BF_UnpinBlock(block));
+
+    // Close the file
+    CALL_OR_DIE(BF_CloseFile(fileDescriptor));
+
     // Memory managment
     BF_Block_Destroy(&block);
-    free(info);
-    free(blockInfo);
+    infoDestroy(info, blockInfo);
 }
 
 SHT_info* SHT_OpenSecondaryIndex(char *indexName){
@@ -279,10 +284,20 @@ SHT_info* SHT_OpenSecondaryIndex(char *indexName){
 
     // Copy the SHT_info of file
     memcpy(info, data, sizeof(*info));
+    // Update fileName
+    // We allocate it inside openFile so we can free the pointer.
+    info->fileName = malloc(strlen(indexName) + 1);
+    // strcpy(info->fileName, indexName);
+
+    // Copy the SHT_info of file
+    memcpy(data, info, sizeof(*info));
 
     // Check if the file is a HT file
     if(isSecondaryHashTable(info))
         return NULL;
+    
+    // Unpin the block
+    CALL_OR_DIE(BF_UnpinBlock(block));
 
     BF_Block_Destroy(&block);
 
@@ -291,21 +306,9 @@ SHT_info* SHT_OpenSecondaryIndex(char *indexName){
 
 
 int SHT_CloseSecondaryIndex(SHT_info* SHT_info ){
-    BF_Block* block;
-    BF_Block_Init(&block); // Initiallize the BF_Block.
-
-    // Unpin first and second blocks
-	CALL_OR_DIE(BF_GetBlock(SHT_info->fileDesc, 0, block));
-	CALL_OR_DIE(BF_UnpinBlock(block));
-
-    CALL_OR_DIE(BF_GetBlock(SHT_info->fileDesc, 1, block));
-	CALL_OR_DIE(BF_UnpinBlock(block));
-
     // Close the file
     CALL_OR_DIE(BF_CloseFile(SHT_info->fileDesc));
 
-    // memory managment
-    BF_Block_Destroy(&block);
     free(SHT_info->fileName);
     free(SHT_info);
     return 0;
@@ -324,6 +327,9 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
     int *arrayOfBuckets = malloc(sht_info->numOfBuckets * sizeof(int));
     // Copy data of buckets into the array
     memcpy(arrayOfBuckets, data, sht_info->numOfBuckets * sizeof(int));
+
+    // Unpin the block with the buckets we dont need it anymore
+    CALL_OR_DIE(BF_UnpinBlock(block));
 
     // Hash the Name.
     int hashedName = hash_string(record.name);
@@ -368,7 +374,8 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
         data -= sizeof(int);                   // Go to the next field of the sht_block_info struct of the currentBlock  
         memcpy(data, &newBlock, sizeof(int));  // Pass the updated next into the next field of the ht_block_info struct of the currentBlock  
         // Write changes to block
-        BF_Block_SetDirty(block);   
+        BF_Block_SetDirty(block);  
+        // Unpin the currentBlock 
         CALL_OR_DIE(BF_UnpinBlock(block));
         // Get the new block and its data
         CALL_OR_DIE(BF_GetBlock(sht_info->fileDesc, newBlock, block));
@@ -435,6 +442,9 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
     int *arrayOfBuckets = malloc(sht_info->numOfBuckets * sizeof(int));
     // Copy data of buckets into the array
     memcpy(arrayOfBuckets, data, sht_info->numOfBuckets * sizeof(int));
+
+    // Unpin the block with the buckets we dont need it anymore
+    CALL_OR_DIE(BF_UnpinBlock(block));
 
     // Hash the Name.
     int hashedName = hash_string(name);

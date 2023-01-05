@@ -227,8 +227,11 @@ HT_info* HT_OpenFile(char *fileName){
     memcpy(info, data, sizeof(*info));
     // Update fileName
     // We allocate it inside openFile so we can free the pointer.
-    info->fileName = malloc(sizeof(fileName));
+    info->fileName = malloc(strlen(fileName) + 1);
     strcpy(info->fileName, fileName);
+
+    // Copy the HT_info of file
+    memcpy(data, info, sizeof(*info));
 
     // Check if the file is a HT file
     if(isHashTable(info))
