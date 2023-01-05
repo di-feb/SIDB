@@ -51,6 +51,6 @@ int main() {
     // Κλείνουμε το αρχείο κατακερματισμού και το δευτερεύον ευρετήριο
     SHT_CloseSecondaryIndex(index_info);
     HT_CloseFile(info);
-    //
+    
     BF_Close();
 }

@@ -15,3 +15,5 @@ valgrind:
 
 clean:
 	rm build/sht_main
+	rm data.db
+	rm index.db

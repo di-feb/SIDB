@@ -10,6 +10,7 @@
 
 #define RECORDS_NUM 100 
 #define FILE_NAME "data.db"
+#define INDEX_FILE_NAME "index.db"
 
 void test_HT_CreateFile(void) {
 	BF_Init(LRU);
