@@ -287,12 +287,12 @@ SHT_info* SHT_OpenSecondaryIndex(char *indexName){
     // Update fileName
     // We allocate it inside openFile so we can free the pointer.
     info->fileName = malloc(strlen(indexName) + 1);
-    // strcpy(info->fileName, indexName);
+    strcpy(info->fileName, indexName);
 
     // Copy the SHT_info of file
     memcpy(data, info, sizeof(*info));
 
-    // Check if the file is a HT file
+    // Check if the file is a SHT file
     if(isSecondaryHashTable(info))
         return NULL;
     
@@ -398,7 +398,7 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
         // Memory Managment
         BF_Block_Destroy(&block);
         free(arrayOfBuckets);
-        return newBlock;
+        return 0;
     }
     // If we have enough space for one more block:
     // Go back to the start of the data of the currentBlock
@@ -423,7 +423,7 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
     CALL_OR_DIE(BF_UnpinBlock(block));
     BF_Block_Destroy(&block);
     free(arrayOfBuckets);
-    return currentBlock;
+    return 0;
 }
 
 int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name){

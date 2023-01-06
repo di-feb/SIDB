@@ -50,7 +50,7 @@ int main() {
 
     // Κλείνουμε το αρχείο κατακερματισμού και το δευτερεύον ευρετήριο
     SHT_CloseSecondaryIndex(index_info);
-    HT_CloseFile(info);
+    // HT_CloseFile(info); // This will give us leaks
     
     BF_Close();
 }
