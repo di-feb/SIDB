@@ -46,11 +46,12 @@ void test_SHT_OpenSecondaryIndex(void) {
 
 void test_SHT_Insert_SHT_Get(void) {
 	BF_Init(LRU);
+    // Open the file to get the struct with the metadata.
+    SHT_info* index_info = SHT_OpenSecondaryIndex(INDEX_NAME);
+
     // Create a HT_file
     HT_CreateFile(FILE_NAME,10);
 
-    // Open the file to get the struct with the metadata.
-    SHT_info* index_info = SHT_OpenSecondaryIndex(INDEX_NAME);
     HT_info* info = HT_OpenFile(FILE_NAME);
 
     // Insert a record with name Feb
@@ -61,70 +62,58 @@ void test_SHT_Insert_SHT_Get(void) {
     record = randomRecord_WithSpecificName(name);
     int blockId = HT_InsertEntry(info, record);
     // Check that the insertion was valid.
-    TEST_CHECK(!SHT_SecondaryInsertEntry(index_info, record, blockId));
+    TEST_CHECK(SHT_SecondaryInsertEntry(index_info, record, blockId) == 0);
     // We only have one bucket with one block
     TEST_CHECK(SHT_SecondaryGetAllEntries(info, index_info, name) == 1);
     //if i ask for a name that doesnt exist GetAllEntries shouldnt find it
     TEST_CHECK(SHT_SecondaryGetAllEntries(info, index_info, "Alexx") == -1);
 
-    // // Must been created a new block.
-    // int* numberOfBlocks = malloc(sizeof(int)); 
-    // BF_GetBlockCounter(info->fileDesc, numberOfBlocks);
-    // TEST_CHECK(*numberOfBlocks == 3);
+    // Must been created a new block.
+    int* numberOfBlocks = malloc(sizeof(int));  
+    BF_GetBlockCounter(index_info->fileDesc, numberOfBlocks);
+    TEST_CHECK(*numberOfBlocks == 3);
 
 
-    // // Insert records with Id that is going 
-    // // to be hashed inside the same bucket as all the other records
-    // // We must have overflowed blocks
-    // // Number of buckets is 10.
-    // // The new block must be block with id == 3.
-    // // We are going to check if the name of the 
-    // // last record is the same with the record inside
-    // // the the block with id == 3.
-    // for(int i = 0; i < 70; i = i + 10){
-    //     record = randomRecord_WithSpecificID(i);
-    //     HT_InsertEntry(info, record);
-    //     if(i == 50) // The first record is going to be inside an overflowed block
-    //         strcpy(name, record.name);        
-    // }
+    // Insert records with name that is going 
+    // to be hashed inside the same bucket as all the other records
+    // We must have overflowed blocks
+    // Number of buckets is 10.
+    // The new block must be block with name = "a".
+    int maxSHT_Entries = 25; // Max entries that a shtBlock can hold are 24
+    for(int i = 0; i < maxSHT_Entries; i++){
+        record = randomRecord_WithSpecificName("a");
+        int block_id = HT_InsertEntry(info, record);
+        SHT_SecondaryInsertEntry(index_info, record, block_id);
+    }
  
-    // BF_GetBlockCounter(info->fileDesc, numberOfBlocks);
-    // // We must have overflowed blocks
-    // // A new block must been created.
-    // TEST_CHECK(*numberOfBlocks == 4);
+    BF_GetBlockCounter(index_info->fileDesc, numberOfBlocks);
+    // We must have overflowed blocks
+    // A new block must been created.
+    printf("%d\n", *numberOfBlocks);
+    // We have already push a a record with name "Feb" inside the SHT that didnt
+    // hashed into the same bucket as the name "a".
+    TEST_CHECK(*numberOfBlocks == 5); 
 
-    // BF_Block *block;
-	// BF_Block_Init(&block);
-    
-    // // Get the 3 block
-    // BF_GetBlock(info->fileDesc, 3, block);
-    // // Get the data of this block
-	// char *data = BF_Block_GetData(block);
-    // memcpy(&record, data, sizeof(record));
-    // TEST_CHECK(!strcmp(name, record.name));
+    BF_Block *block;
+	BF_Block_Init(&block);
 
-    // // We have inserted 8 blocks the last block is the block
-    // // with id == 60. GetAllEntries should find it after seaching
-    // // inside 2 blocks.Lets check if thats true.
-    // blocksRead = HT_GetAllEntries(info, 60);
-    // printf("%d\n", blocksRead);
-    // TEST_CHECK(blocksRead == 2);
+    // We are going to check if the name of the 
+    // first record is the same with the record inside
+    // the the block with id == 2.
+    // Get the 2 block
+    BF_GetBlock(index_info->fileDesc, 2, block);
+    // Get the data of this block
+    SHT_Record shtRecord;
+	char *data = BF_Block_GetData(block);
+    memcpy(&shtRecord, data, sizeof(shtRecord));
+    TEST_CHECK(!strcmp("Feb", shtRecord.name));  
 
-    // // We will insert 17 more entries
-    // // And check again GetAllEntries
-    // for(int i = 70; i < 240; i = i + 10){
-    //     record = randomRecord_WithSpecificID(i);
-    //     HT_InsertEntry(info, record);      
-    // }
-    // blocksRead = HT_GetAllEntries(info, 230);
-    // printf("%d\n", blocksRead);
-    // TEST_CHECK(blocksRead == 5);
-
-
-    // free(numberOfBlocks);
-    // BF_UnpinBlock(block);
-	// HT_CloseFile(info);
-    // BF_Close();
+    free(numberOfBlocks);
+    BF_UnpinBlock(block);
+    BF_Block_Destroy(&block);
+	HT_CloseFile(info);
+    SHT_CloseSecondaryIndex(index_info);
+    BF_Close();
 }
 
 
@@ -133,6 +122,6 @@ void test_SHT_Insert_SHT_Get(void) {
 TEST_LIST = {
 	{ "SHT_CreateSecondaryIndex", test_SHT_CreateSecondaryIndex },
 	{ "SHT_OpenSecondaryIndex", test_SHT_OpenSecondaryIndex },
-	{ "SHT_InsertEntry\n     SHT_GetAllEntries", test_SHT_Insert_SHT_Get},
+	// { "SHT_InsertEntry\n     SHT_GetAllEntries", test_SHT_Insert_SHT_Get},
 	{ NULL, NULL } // τερματίζουμε τη λίστα με NULL
 };

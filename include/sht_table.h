@@ -1,7 +1,7 @@
 #ifndef SHT_TABLE_H
 #define SHT_TABLE_H
-#include <record.h>
-#include <ht_table.h>
+#include "record.h"
+#include "ht_table.h"
 
 
 
@@ -70,5 +70,5 @@ int SHT_SecondaryGetAllEntries(
     SHT_info* header_info, /* επικεφαλίδα του αρχείου δευτερεύοντος ευρετηρίου*/
     char* name /* το όνομα στο οποίο γίνεται αναζήτηση */);
 
-
+uint hash_string(void*);
 #endif // SHT_FILE_H

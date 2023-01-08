@@ -25,8 +25,9 @@ int main() {
     BF_Init(LRU);
     // Αρχικοποιήσεις
     HT_CreateFile(FILE_NAME,10);
+    HT_info* info = HT_OpenFile(FILE_NAME); // HT file  should be opened so that the ht, sht files get different fileDesc 
+
     SHT_CreateSecondaryIndex(INDEX_NAME,10,FILE_NAME);
-    HT_info* info = HT_OpenFile(FILE_NAME);
     SHT_info* index_info = SHT_OpenSecondaryIndex(INDEX_NAME);
 
     // Θα ψάξουμε στην συνέχεια το όνομα searchName
@@ -46,11 +47,13 @@ int main() {
     if(SHT_SecondaryGetAllEntries(info,index_info,searchName) == -1){
         printf("-1\n");
     }
-
-
     // Κλείνουμε το αρχείο κατακερματισμού και το δευτερεύον ευρετήριο
+
+    HT_CloseFile(info); 
+    if(HashStatistics(FILE_NAME) == -1)
+        printf("HashStatics -1\n");
+
     SHT_CloseSecondaryIndex(index_info);
-    // HT_CloseFile(info); // This will give us leaks
     
     BF_Close();
 }

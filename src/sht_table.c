@@ -169,7 +169,7 @@ bool isSecondaryHashTable(SHT_info* info){
 }
 
 // Borrowed by the Data Bases class of Mister Chatzikokolakis!
-int hash_string(void* value) {
+uint hash_string(void* value) {
 	// djb2 hash function, simple, fast, and at most cases effective.
     uint hash = 5381;
     for (char* s = value; *s != '\0'; s++)
@@ -332,8 +332,8 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
     CALL_OR_DIE(BF_UnpinBlock(block));
 
     // Hash the Name.
-    int hashedName = hash_string(record.name);
-    int hashedIndex = hashedName % sht_info->numOfBuckets;
+    uint hashedName = hash_string(record.name);
+    uint hashedIndex = abs(hashedName % sht_info->numOfBuckets);
 
     // Check if a specific bucket is unitiallized.
     // If it is allocate a new block and let bucket point to that block.
@@ -448,10 +448,10 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
 
     // Hash the Name.
     int hashedName = hash_string(name);
-    int hashedIndex = hashedName % sht_info->numOfBuckets;
+    int hashedIndex = abs(hashedName % sht_info->numOfBuckets);
 
     int currentBlock = arrayOfBuckets[hashedIndex];
-    int* blocksRead = create_int(1);
+    int* blocksRead = create_int(0);
     // Iterate into all the blocks with this hashedIndex
     while(currentBlock != UNITIALLIZED){
 
