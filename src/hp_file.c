@@ -90,7 +90,7 @@ int HP_CreateFile(char *fileName) {
 	CALL_OR_DIE(BF_GetBlock(fileDesc, 0, block0));
 
 	// Initialise header block
-	headerBlock->isHeap = T;
+	headerBlock->isHeap = true;
 	headerBlock->fileDesc = fileDesc;
 	headerBlock->blocksNo = 1;
 
@@ -148,11 +148,8 @@ HP_info* HP_OpenFile(char *fileName) {
 	memcpy(data, headerBlock, sizeof(HP_info));
 
 	// Check type of file
-	if (headerBlock->isHeap == F) {
-		printf("Wrong type of file\n");
-		free(headerBlock);
+	if (isHeapFile(headerBlock))
 		return NULL;
-	}
 
 	CALL_OR_DIE(BF_UnpinBlock(block0));
 	BF_Block_Destroy(&block0);

@@ -1,16 +1,15 @@
 #ifndef HP_FILE_H
 #define HP_FILE_H
-#include "record.h"
-
-typedef enum {F, T} boolean;    // Size 4 bytes
+#include <record.h>
+#include <stdbool.h>
 
 /* Η δομή HP_info κρατάει μεταδεδομένα που σχετίζονται με το αρχείο σωρού*/
 typedef struct {
-    boolean isHeap;     // File Type check (F == 0)
+    bool isHeap;        // File Type check (F == 0)
     char* fileName;
     int fileDesc;       // File descriptor
     int blocksNo;       // Number of blocks in file
-} HP_info; // Size: 24 bytes
+} HP_info; // Size: 22 bytes
 
 typedef struct {
     int blockId;            // Index of block
