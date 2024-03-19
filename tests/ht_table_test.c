@@ -3,7 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "../include/accutest.h" // A simple library for unit testing
+#include "../include/acutest.h" // A simple library for unit testing
 #include "../include/bf.h"
 #include "../include/ht_table.h"
 #include "../include/record.h"
@@ -115,16 +115,17 @@ void test_HT_Insert_HT_Get(void) {
 
     free(numberOfBlocks);
     BF_UnpinBlock(block);
+    BF_Block_Destroy(&block);
 	HT_CloseFile(info);
     BF_Close();
 }
 
 
 
-// Λίστα με όλα τα tests προς εκτέλεση
+// List of all the tests
 TEST_LIST = {
 	{ "HT_CreateFile", test_HT_CreateFile },
 	{ "HT_OpenFile", test_HT_OpenFile },
 	{ "HT_InsertEntry\n     HT_GetAllEntries", test_HT_Insert_HT_Get},
-	{ NULL, NULL } // τερματίζουμε τη λίστα με NULL
+	{ NULL, NULL } // end the test list with a NULL
 };

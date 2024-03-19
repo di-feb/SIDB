@@ -23,37 +23,38 @@
 int main() {
     srand(12569874);
     BF_Init(LRU);
-    // Αρχικοποιήσεις
+    // Initializations
     HT_CreateFile(FILE_NAME,10);
     SHT_CreateSecondaryIndex(INDEX_NAME,10,FILE_NAME);
 
-    HT_info* info = HT_OpenFile(FILE_NAME); // HT file  should be opened so that the ht, sht files get different fileDesc 
+    HT_info* info = HT_OpenFile(FILE_NAME); // HT file should be opened so that the ht, sht files get different fileDesc 
     SHT_info* index_info = SHT_OpenSecondaryIndex(INDEX_NAME);
 
-    // Θα ψάξουμε στην συνέχεια το όνομα searchName
+    // We will search for the name searchName later
     Record record=randomRecord();
     char searchName[15];
     strcpy(searchName, record.name);
 
-    // Κάνουμε εισαγωγή τυχαίων εγγραφών τόσο στο αρχείο κατακερματισμού τις οποίες προσθέτουμε και στο δευτερεύον ευρετήριο
+    // We insert random records both in the hash file which we also add to the secondary index
     printf("Insert Entries\n");
     for (int id = 0; id < RECORDS_NUM; ++id) {
         record = randomRecord();
         int block_id = HT_InsertEntry(info, record);
         SHT_SecondaryInsertEntry(index_info, record, block_id);
     }
-    // Τυπώνουμε όλες τις εγγραφές με όνομα searchName
+    // We print all records with name searchName
     printf("RUN PrintAllEntries for name %s\n",searchName);
     if(SHT_SecondaryGetAllEntries(info,index_info,searchName) == -1){
         printf("-1\n");
     }
-    // Κλείνουμε το αρχείο κατακερματισμού και το δευτερεύον ευρετήριο
+    // We close the hash file and the secondary index
 
     HT_CloseFile(info); 
     if(HashStatistics(FILE_NAME) == -1)
         printf("HashStatics -1\n");
 
-    // SHT_CloseSecondaryIndex(index_info); This will give us leaks
+    // SHT_CloseSecondaryIndex(index_info); // This will give us leaks due to an error in the BF library
+    // We will still get some leaks because we didn't close the file, but everything else should be fine
     
     BF_Close();
 }

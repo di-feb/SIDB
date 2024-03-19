@@ -5,19 +5,19 @@
 extern "C" {
 #endif
 
-#define BF_BLOCK_SIZE 512      /* Το μέγεθος ενός block σε bytes */
-#define BF_BUFFER_SIZE 100     /* Ο μέγιστος αριθμός block που κρατάμε στην μνήμη */
-#define BF_MAX_OPEN_FILES 100  /* Ο μέγιστος αριθμός ανοικτών αρχείων */
+#define BF_BLOCK_SIZE 512      /* The size of a block in bytes */
+#define BF_BUFFER_SIZE 100     /* The maximum number of blocks  */
+#define BF_MAX_OPEN_FILES 100  /* The maximum number of open files */
 
 typedef enum BF_ErrorCode {
   BF_OK,
-  BF_OPEN_FILES_LIMIT_ERROR,     /* Υπάρχουν ήδη BF_MAX_OPEN_FILES αρχεία ανοικτά */
-  BF_INVALID_FILE_ERROR,         /* Ο αναγνωριστικός αριθμός αρχείου δεν αντιστιχεί σε κάποιο ανοιχτό αρχείο */
-  BF_ACTIVE_ERROR,               /* Το επίπεδο BF είναι ενεργό και δεν μπορεί να αρχικοποιηθεί */
-  BF_FILE_ALREADY_EXISTS,        /* Το αρχείο δεν μπορεί να δημιουργιθεί γιατι υπάρχει ήδη */
-  BF_FULL_MEMORY_ERROR,          /* Η μνήμη έχει γεμίσει με ενεργά block */
-  BF_INVALID_BLOCK_NUMBER_ERROR, /* Το block που ζητήθηκε δεν υπάρχει στο αρχείο */
-  BF_AVAILABLE_PIN_BLOCKS_ERROR, /* Το αρχειο δεν μπορεί να κλείσει επειδή υπάρχουν ενεργά Block στην μνήμη */
+  BF_OPEN_FILES_LIMIT_ERROR,     /* There are already BF_MAX_OPEN_FILES open files */
+  BF_INVALID_FILE_ERROR,         /* The file identifier does not correspond to any open file */
+  BF_ACTIVE_ERROR,               /* The BF level is active and cannot be initialized */
+  BF_FILE_ALREADY_EXISTS,        /* The file cannot be created because it already exists */
+  BF_FULL_MEMORY_ERROR,          /* The memory is filled with active blocks */
+  BF_INVALID_BLOCK_NUMBER_ERROR, /* The requested block does not exist in the file */
+  BF_AVAILABLE_PIN_BLOCKS_ERROR, /* The file cannot close because there are active blocks in memory */
   BF_ERROR
 } BF_ErrorCode;
 
@@ -27,127 +27,126 @@ typedef enum ReplacementAlgorithm {
 } ReplacementAlgorithm;
 
 
-// Δομή Block
+// Block Structure
 typedef struct BF_Block BF_Block;
 
 /*
- * Η συνάρτηση BF_Block_Init αρχικοποιεί και δεσμεύει την κατάλληλη μνήμη
- * για την δομή BF_BLOCK.
+ * The BF_Block_Init function initializes and allocates the appropriate memory
+ * for the BF_BLOCK structure.
  */
 void BF_Block_Init(BF_Block **block);
 
 /*
- * Η συνάρτηση BF_Block_Destroy αποδεσμεύει την μνήμη που καταλαμβάνει
- * η δομή BF_BLOCK.
+ * The BF_Block_Destroy function deallocates the memory occupied
+ * by the BF_BLOCK structure.
  */
 void BF_Block_Destroy(BF_Block **block);
 
 /*
- * Η συνάρτηση BF_Block_SetDirty αλάζει την κατάσταση του block σε dirty.
- * Αυτό πρακτικά σημαίνει ότι τα δεδομένα του block έχουν αλλαχθεί και το
- * επίπεδο BF όταν χρειαστεί θα γράψει το block ξανά στον δίσκο. Σε
- * περίπτωση που απλός διαβάζουμε τα δεδομένα χωρίς να τα αλλάζουμε τότε
- * δεν χρειάζεται να καλέσουμε την συνάρτηση.
+ * The BF_Block_SetDirty function changes the state of the block to dirty.
+ * This practically means that the block's data has been changed and the
+ * BF level will write the block back to the disk when needed. In
+ * case we just read the data without changing it then
+ * we do not need to call the function.
  */
 void BF_Block_SetDirty(BF_Block *block);
 
 /*
- * Η συνάρτηση BF_Βlock_GetData επιστρέφει ένα δείκτη στα δεδομένα του Block.
- * Άμα αλάξουμε τα δεδομένα θα πρέπει να κάνουμε το block dirty με την κλήση
- * της συνάρτησης BF_Block_GetData.
+ * The BF_Block_GetData function returns a pointer to the Block's data.
+ * If we change the data we should make the block dirty by calling
+ * the BF_Block_GetData function.
  */
 char* BF_Block_GetData(const BF_Block *block);
 
 /*
- * Με τη συνάρτηση BF_Init πραγματοποιείται η αρχικοποίηση του επιπέδου BF.
- * Μπορούμε να επιλέξουμε ανάμεσα σε δύο πολιτικές αντικατάστασις Block
- * εκείνης της LRU και εκείνης της MRU.
+ * The BF_Init function initializes the BF level.
+ * We can choose between two Block replacement policies
+ * that of LRU and that of MRU.
  */
 BF_ErrorCode BF_Init(const ReplacementAlgorithm repl_alg);
 
 /*
- * Η συνάρτηση BF_CreateFile δημιουργεί ένα αρχείο με όνομα filename το
- * οποίο αποτελείται από blocks. Αν το αρχείο υπάρχει ήδη τότε επιστρέφεται
- * κωδικός λάθους. Σε περίπτωση επιτυχούς εκτέλεσης της συνάρτησης επιστρέφεται
- * BF_OK, ενώ σε περίπτωση αποτυχίας επιστρέφεται κωδικός λάθους. Αν θέλετε να
- * δείτε το είδος του λάθους μπορείτε να καλέσετε τη συνάρτηση BF_PrintError.
+ * The BF_CreateFile function creates a file named filename that
+ * consists of blocks. If the file already exists then an
+ * error code is returned. In case of successful execution of the function, BF_OK is returned,
+ * while in case of failure, an error code is returned. If you want to
+ * see the type of error you can call the BF_PrintError function.
  */
 BF_ErrorCode BF_CreateFile(const char* filename);
 
 /*
- * Η συνάρτηση BF_OpenFile ανοίγει ένα υπάρχον αρχείο από blocks με όνομα
- * filename και επιστρέφει το αναγνωριστικό του αρχείου στην μεταβλητή
- * file_desc. Σε περίπτωση επιτυχίας επιστρέφεται BF_OK ενώ σε περίπτωση
- * αποτυχίας, επιστρέφεται ένας κωδικός λάθους. Αν θέλετε να δείτε το είδος
- * του λάθους μπορείτε να καλέσετε τη συνάρτηση BF_PrintError.
+ * The BF_OpenFile function opens an existing block file named
+ * filename and returns the file's identifier in the
+ * file_desc variable. In case of success, BF_OK is returned while in case of
+ * failure, an error code is returned. If you want to see the type
+ * of error you can call the BF_PrintError function.
  */
 BF_ErrorCode BF_OpenFile(const char* filename, int *file_desc);
 
 /*
- * Η συνάρτηση BF_CloseFile κλείνει το ανοιχτό αρχείο με αναγνωριστικό αριθμό
- * file_desc. Σε περίπτωση επιτυχίας επιστρέφεται BF_OK ενώ σε περίπτωση
- * αποτυχίας, επιστρέφεται ένας κωδικός λάθους. Αν θέλετε να δείτε το
- * είδος του λάθους μπορείτε να καλέσετε τη συνάρτηση BF_PrintError.
+ * The function BF_CloseFile closes the open file with identifier number
+ * file_desc. In case of success, BF_OK is returned, while in case of
+ * failure, an error code is returned. If you want to see the
+ * type of error you can call the function BF_PrintError.
  */
 BF_ErrorCode BF_CloseFile(const int file_desc);
 
 /*
- * Η συνάρτηση Get_BlockCounter δέχεται ως όρισμα τον αναγνωριστικό αριθμό
- * file_desc ενός ανοιχτού αρχείου από block και βρίσκει τον αριθμό των
- * διαθέσιμων blocks του, τον οποίο και επιστρέφει στην μεταβλητή blocks_num.
- * Σε περίπτωση επιτυχίας επιστρέφεται BF_OK ενώ σε περίπτωση αποτυχίας,
- * επιστρέφεται ένας κωδικός λάθους. Αν θέλετε να δείτε το είδος του λάθους
- * μπορείτε να καλέσετε τη συνάρτηση BF_PrintError.
+ * The function Get_BlockCounter takes as an argument the identifier number
+ * file_desc of an open file from block and finds the number of
+ * available blocks of it, which it returns in the variable blocks_num.
+ * In case of success, BF_OK is returned, while in case of failure,
+ * an error code is returned. If you want to see the type of error
+ * you can call the function BF_PrintError.
  */
 BF_ErrorCode BF_GetBlockCounter(const int file_desc, int *blocks_num);
 
 /*
- * Με τη συνάρτηση BF_AllocateBlock δεσμεύεται ένα καινούριο block για το
- * αρχείο με αναγνωριστικό αριθμό blockFile. Το νέο block δεσμεύεται πάντα
- * στο τέλος του αρχείου, οπότε ο αριθμός του block είναι
- * BF_getBlockCounter(file_desc) - 1. Το block που δεσμεύεται καρφιτσώνεται
- * στην μνήμη (pin) και επιστρέφεται στην μεταβλητή block. Όταν δεν το
- * χρειαζόμαστε άλλο αυτό το block τότε πρέπει να ενημερώσουμε τον επίπεδο
- * block καλώντας την συνάρτηση BF_UnpinBlock. Σε περίπτωση επιτυχίας
- * επιστρέφεται BF_OK ενώ σε περίπτωση αποτυχίας, επιστρέφεται ένας κωδικός
- * λάθους. Αν θέλετε να δείτε το είδος του λάθους μπορείτε να καλέσετε τη
- * συνάρτηση BF_PrintError.
+ * With the function BF_AllocateBlock a new block is allocated for the
+ * file with identifier number blockFile. The new block is always
+ * allocated at the end of the file, so the number of the block is
+ * BF_getBlockCounter(file_desc) - 1. The block that is allocated is pinned
+ * in memory (pin) and is returned in the variable block. When we no longer
+ * need this block then we must update the block level
+ * by calling the function BF_UnpinBlock. In case of success,
+ * BF_OK is returned, while in case of failure, an error code
+ * is returned. If you want to see the type of error you can call the
+ * function BF_PrintError.
  */
 BF_ErrorCode BF_AllocateBlock(const int file_desc, BF_Block *block);
 
-
 /*
- * Η συνάρτηση BF_GetBlock βρίσκει το block με αριθμό block_num του ανοιχτού
- * αρχείου file_desc και το επιστρέφει στην μεταβλητή block. Το block που
- * δεσμεύεται καρφιτσώνεται στην μνήμη (pin). Όταν δεν χρειαζόμαστε άλλο αυτό
- * το block τότε πρέπει να ενημερώσουμε τον επίπεδο block καλώντας την συνάρτηση
- * BF_UnpinBlock. Σε περίπτωση επιτυχίας επιστρέφεται BF_OK ενώ σε περίπτωση
- * αποτυχίας, επιστρέφεται ένας κωδικός λάθους. Αν θέλετε να δείτε το είδος του
- * λάθους μπορείτε να καλέσετε τη συνάρτηση BF_PrintError.
+ * The function BF_GetBlock finds the block with number block_num of the open
+ * file file_desc and returns it in the variable block. The block that
+ * is allocated is pinned in memory (pin). When we no longer need this
+ * block then we must update the block level by calling the function
+ * BF_UnpinBlock. In case of success, BF_OK is returned, while in case of
+ * failure, an error code is returned. If you want to see the type of
+ * error you can call the function BF_PrintError.
  */
 BF_ErrorCode BF_GetBlock(const int file_desc,
                          const int block_num,
                          BF_Block *block);
 
 /*
- * Η συνάρτηση BF_UnpinBlock αποδεσμεύει το block από το επίπεδο Block το
- * οποίο κάποια στηγμή θα το γράψει στο δίσκο. Σε περίπτωση επιτυχίας
- * επιστρέφεται BF_OK ενώ σε περίπτωση αποτυχίας, επιστρέφεται ένας κωδικός
- * λάθους. Αν θέλετε να δείτε το είδος του λάθους μπορείτε να καλέσετε τη
- * συνάρτηση BF_PrintError.
+ * The function BF_UnpinBlock unbinds the block from the Block level which
+ * at some point will write it to the disk. In case of success,
+ * BF_OK is returned, while in case of failure, an error code
+ * is returned. If you want to see the type of error you can call the
+ * function BF_PrintError.
  */
 BF_ErrorCode BF_UnpinBlock(BF_Block *block);
 
 /*
- * Η συνάρτηση BF_PrintError βοηθά στην εκτύπωση των σφαλμάτων που δύναται να
- * υπάρξουν με την κλήση συναρτήσεων του επιπέδου αρχείου block. Εκτυπώνεται
- * στο stderr μια περιγραφή του πιο σφάλματος.
+ * The function BF_PrintError helps in printing the errors that may
+ * exist with the call of block file level functions. A description of the error
+ * is printed to stderr.
  */
 void BF_PrintError(BF_ErrorCode err);
 
 /*
- * Η συνάρτηση BF_Close κλήνει το επίπεδο Block γράφοντας στον δίσκο όποια
- * block είχε στην μνήμη.
+ * The function BF_Close closes the Block level writing any
+ * blocks it had in memory to the disk.
  */
 BF_ErrorCode BF_Close();
 

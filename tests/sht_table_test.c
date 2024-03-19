@@ -3,7 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "../include/accutest.h" // A simple library for unit testing
+#include "../include/acutest.h" // A simple library for unit testing
 #include "../include/bf.h"
 #include "../include/ht_table.h"
 #include "../include/sht_table.h"
@@ -109,6 +109,7 @@ void test_SHT_Insert_SHT_Get(void) {
     TEST_CHECK(!strcmp("Feb", shtRecord.name));  
 
     free(numberOfBlocks);
+    free(name);
     BF_UnpinBlock(block);
     BF_Block_Destroy(&block);
 	HT_CloseFile(info);
@@ -118,10 +119,10 @@ void test_SHT_Insert_SHT_Get(void) {
 
 
 
-// Λίστα με όλα τα tests προς εκτέλεση
+// List of all the tests
 TEST_LIST = {
 	{ "SHT_CreateSecondaryIndex", test_SHT_CreateSecondaryIndex },
 	{ "SHT_OpenSecondaryIndex", test_SHT_OpenSecondaryIndex },
 	{ "SHT_InsertEntry\n     SHT_GetAllEntries", test_SHT_Insert_SHT_Get},
-	{ NULL, NULL } // τερματίζουμε τη λίστα με NULL
+	{ NULL, NULL } // end the test list with a NULL
 };
