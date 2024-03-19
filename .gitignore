@@ -1,13 +1,13 @@
-# Το git από default αποθηκεύει _όλα_ τα αρχεία, _εκτός_ όσων υπάρχουν στο .gitignore (blacklist).
-# Συχνά όμως είναι πιο βολικό να κάνουμε το αντίστροφο, δηλαδή να μην αποθηκεύουμε _κανένα_ αρχείο
-# πάρα _μόνο_ αυτά που δηλώνονται στο .gitignore (whitelist). Αυτό επιτυγχάνεται αγνοώντας τα πάντα (*)
-# και χρησιμοποιώντας το "!" που σημαίνει "μην αγνοήσεις το συγκεκριμένο pattern".
+# By default, git stores _all_ files, _except_ those in the .gitignore (blacklist).
+# However, it is often more convenient to do the opposite, i.e., not to store _any_ files
+# except _only_ those declared in the .gitignore (whitelist). This is achieved by ignoring everything (*)
+# and using "!" which means "do not ignore this specific pattern".
 
-# Αγνοούμε όλα τα αρχεία (όχι τα directories)
+# We ignore all files (not directories)
 *
 !*/
 
-# Εκτός από τα παρακάτω
+# Except for the following
 !*.c
 !*.h
 !*.mk
