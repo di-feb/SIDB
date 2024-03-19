@@ -1,9 +1,16 @@
-# Data Structures Implementation: Hash Table, Secondary Hash Table
+# System Implementation of Databases (SIDB)
 
-## Overview
+SIDB is a project developed as part of the "System Implementation of Databases" course. It involves the implementation of static hash tables and secondary hash tables for efficient record management. The hash tables are stored in files and use the Block File (BF) library for low-level disk block abstraction.
 
-This project implements a static **hash table** and a ***secondary hash table*** for ***record management***.  
-The hash tables are stored in files and use the Block File (BF) library (bf.h functions) for low-level disk block abstraction.  
+## Features
+
+- **Hash Table Management**: The project provides functions for creating, opening, and closing hash files, inserting records, and retrieving all records with a specific key value. It also includes a function for printing hash file statistics.
+
+- **Secondary Hash Table Management**: In addition to the primary hash table, the project also implements a secondary hash table. It provides functions for creating and managing secondary hash files, including inserting records and retrieving all records with a specific key value.
+
+- **File Storage**: All hash tables are stored in files, with an empty `build/` directory included for storing files created when running the programs.
+
+This project serves as a practical application of data structures and file management in the context of database systems. It demonstrates the use of hash tables for efficient data retrieval and the use of secondary hash tables for additional indexing. 
 
 The project includes the following main functions:
 
