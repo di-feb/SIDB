@@ -19,6 +19,9 @@ The project includes the following main functions:
 - `SHT_SecondaryInsertEntry`: Inserts a record into a secondary hash file.
 - `SHT_SecondaryGetAllEntries`: Prints all records in a secondary hash file that have a specific key value.
 
+The project includes an empty folder build with a .gitkeep file inside it.
+We use this folder to store the files that are created when we run the programs.
+
 ## Documentation
 
 This project involves the implementation of a set of functions that manage files created based on **static hash table** and **static secondary hash table**  organization.  
@@ -90,7 +93,7 @@ This project uses a Makefile for easy compilation and execution of the programs.
     ```c
     make val_sht
     ```
-    
+
     This will run the sht_main file inside the examples directory.
 
 ### Run Tests
